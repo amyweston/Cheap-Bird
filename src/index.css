@@ -43,15 +43,20 @@ body {
   display: flex;
   align-items: center;
   gap: 0.7rem;
+  flex-wrap: wrap;
 }
 
-.brand p {
+.brand-title {
   margin: 0;
   font-weight: 700;
+  color: #f4f7ff;
+  font-size: 1.05rem;
 }
 
-.brand small {
+.brand-tagline {
   color: #a7b7e5;
+  font-size: 0.86rem;
+  margin-top: 1px;
 }
 
 .brand-dot {
@@ -74,6 +79,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
+  width: 100%;
 }
 
 .links a {
@@ -87,6 +93,22 @@ body {
 .links a.active {
   background: rgba(115, 138, 255, 0.25);
   border: 1px solid rgba(149, 168, 255, 0.42);
+}
+
+.links .profile-link {
+  margin-left: auto;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(149, 168, 255, 0.35);
+  background: rgba(124, 149, 255, 0.12);
+}
+
+.profile-icon {
+  width: 21px;
+  height: 21px;
 }
 
 .page-shell {

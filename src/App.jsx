@@ -101,6 +101,15 @@ function BirdLogo() {
   )
 }
 
+function ProfileIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="profile-icon" aria-hidden="true">
+      <circle cx="12" cy="8" r="4" fill="none" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M4.5 20c1.6-3.8 4.3-5.7 7.5-5.7s5.9 1.9 7.5 5.7" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function HomePage({ onGoCompare, onGoAlerts, savingsValue }) {
   return (
     <main className="page-shell">
@@ -691,10 +700,8 @@ function App() {
           <span className="brand-dot">
             <BirdLogo />
           </span>
-          <div>
-            <p>Cheap Bird</p>
-            <small>Compare, Save, Book</small>
-          </div>
+          <p className="brand-title">Cheap Bird</p>
+          <small className="brand-tagline">Compare, Save, Book</small>
         </div>
         <nav className="links">
           <NavLink to="/" end>
@@ -704,8 +711,10 @@ function App() {
           <NavLink to="/planner">Cost Planner</NavLink>
           <NavLink to="/booking">Booking</NavLink>
           <NavLink to="/alerts">Alerts</NavLink>
-          <NavLink to="/profile">Profile</NavLink>
           <NavLink to="/group">Group Tools</NavLink>
+          <NavLink to="/profile" className="profile-link" aria-label="Profile">
+            <ProfileIcon />
+          </NavLink>
         </nav>
       </header>
 
