@@ -109,14 +109,58 @@ function HomePage({ onGoCompare, onGoAlerts, savingsValue }) {
 function ComparePage({ transportOptions, onAddBooking, bookedIds }) {
   const [selectedMode, setSelectedMode] = useState('All')
   const [maxBudget, setMaxBudget] = useState(220)
+  const [destination, setDestination] = useState('Washington, DC')
+
+  const destinationProfiles = {
+    'Washington, DC': { flight: 0, train: 0, bus: 0, drive: 0 },
+    'New York, NY': { flight: -24, train: -16, bus: -9, drive: -6 },
+    'Chicago, IL': { flight: 38, train: 28, bus: 19, drive: 15 },
+    'Atlanta, GA': { flight: 22, train: 34, bus: 26, drive: 18 },
+    'Miami, FL': { flight: 55, train: 47, bus: 41, drive: 33 },
+    'Philadelphia, PA': { flight: -12, train: -8, bus: -6, drive: -4 },
+    'Los Angeles, CA': { flight: 92, train: 118, bus: 96, drive: 74 },
+    'San Francisco, CA': { flight: 88, train: 112, bus: 90, drive: 69 },
+    'Seattle, WA': { flight: 84, train: 109, bus: 88, drive: 66 },
+    'Denver, CO': { flight: 61, train: 73, bus: 58, drive: 43 },
+    'Dallas, TX': { flight: 52, train: 66, bus: 54, drive: 39 },
+    'Houston, TX': { flight: 57, train: 71, bus: 57, drive: 42 },
+    'Orlando, FL': { flight: 58, train: 50, bus: 45, drive: 36 },
+    'Las Vegas, NV': { flight: 77, train: 96, bus: 79, drive: 61 },
+    'Nashville, TN': { flight: 36, train: 45, bus: 33, drive: 27 },
+    'Charlotte, NC': { flight: 28, train: 37, bus: 30, drive: 23 },
+    'Detroit, MI': { flight: 31, train: 40, bus: 31, drive: 24 },
+    'Toronto, ON': { flight: 33, train: 39, bus: 29, drive: 26 },
+    'Montreal, QC': { flight: 30, train: 35, bus: 27, drive: 22 },
+    'Vancouver, BC': { flight: 86, train: 108, bus: 87, drive: 65 },
+    'Mexico City, MX': { flight: 101, train: 126, bus: 108, drive: 82 },
+    'London, UK': { flight: 210, train: 999, bus: 999, drive: 999 },
+    'Paris, FR': { flight: 224, train: 999, bus: 999, drive: 999 },
+    'Tokyo, JP': { flight: 285, train: 999, bus: 999, drive: 999 },
+  }
+
+  const destinationFactor = destinationProfiles[destination] ?? destinationProfiles['Washington, DC']
+
+  const destinationAwareOptions = useMemo(() => {
+    return transportOptions.map((option) => {
+      const modeKey = option.mode.toLowerCase()
+      const adjustment = destinationFactor[modeKey] ?? 0
+      return {
+        ...option,
+        route: `Boston to ${destination}`,
+        price: Math.max(35, option.price + adjustment),
+      }
+    })
+  }, [destination, destinationFactor, transportOptions])
 
   const filteredOptions = useMemo(() => {
-    return transportOptions.filter((option) => {
+    return destinationAwareOptions
+      .filter((option) => {
       const modeMatch = selectedMode === 'All' || option.mode === selectedMode
       const budgetMatch = option.price <= maxBudget
       return modeMatch && budgetMatch
     })
-  }, [maxBudget, selectedMode, transportOptions])
+      .sort((a, b) => a.price - b.price)
+  }, [destinationAwareOptions, maxBudget, selectedMode])
 
   return (
     <main className="page-shell">
@@ -125,6 +169,16 @@ function ComparePage({ transportOptions, onAddBooking, bookedIds }) {
         <p>Choose the option that best fits your budget, schedule, and comfort.</p>
       </section>
       <section className="card filter-row">
+        <label>
+          Destination
+          <select value={destination} onChange={(event) => setDestination(event.target.value)}>
+            {Object.keys(destinationProfiles).map((city) => (
+              <option key={city} value={city}>
+                {city}
+              </option>
+            ))}
+          </select>
+        </label>
         <label>
           Mode
           <select value={selectedMode} onChange={(event) => setSelectedMode(event.target.value)}>
@@ -149,7 +203,7 @@ function ComparePage({ transportOptions, onAddBooking, bookedIds }) {
       </section>
       <section className="card">
         <div className="table-header">
-          <h2>Boston to Washington DC - May 24</h2>
+          <h2>Boston to {destination} - May 24</h2>
           <span className="chip">4 live sources synced</span>
         </div>
         <div className="comparison-grid">
