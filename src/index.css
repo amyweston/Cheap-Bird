@@ -356,6 +356,15 @@ p {
   color: #a7bbe8;
 }
 
+.notification-status {
+  font-size: 0.82rem;
+  color: #9be5c8;
+  background: rgba(72, 226, 170, 0.14);
+  border: 1px solid rgba(72, 226, 170, 0.4);
+  border-radius: 10px;
+  padding: 0.45rem 0.55rem;
+}
+
 .timeline-item {
   border: 1px solid rgba(148, 168, 255, 0.22);
   border-radius: 12px;

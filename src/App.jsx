@@ -373,12 +373,21 @@ function BookingPage({ bookingItems, onRemoveBooking, onTrackRoute, trackedRoute
 }
 
 function AlertsPage({ trackedRoutes, onSimulatePriceTick }) {
+  const [notificationSubscriptions, setNotificationSubscriptions] = useState({})
+
   const timeline = [
     { day: 'Now', event: 'Lowest average fare window opens', trend: 'down' },
     { day: 'Tue', event: 'Flight demand rises after 6 PM', trend: 'up' },
     { day: 'Thu', event: 'Train flash sale predicted', trend: 'down' },
     { day: 'Weekend', event: 'Last-minute prices spike likely', trend: 'up' },
   ]
+
+  function handleToggleNotification(routeId) {
+    setNotificationSubscriptions((current) => ({
+      ...current,
+      [routeId]: !current[routeId],
+    }))
+  }
 
   return (
     <main className="page-shell">
@@ -410,6 +419,20 @@ function AlertsPage({ trackedRoutes, onSimulatePriceTick }) {
                   {delta <= 0 ? `Down ${formatPrice(Math.abs(delta))}` : `Up ${formatPrice(delta)}`}
                 </p>
                 <p className="sparkline">{route.history.map((value) => formatPrice(value)).join(' -> ')}</p>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => handleToggleNotification(route.id)}
+                >
+                  {notificationSubscriptions[route.id]
+                    ? 'Price Notifications On'
+                    : 'Track Price Notification'}
+                </button>
+                {notificationSubscriptions[route.id] && (
+                  <p className="notification-status">
+                    We will notify you when this route drops by at least $10.
+                  </p>
+                )}
               </article>
             )
           })}
