@@ -49,6 +49,41 @@ function formatPrice(value) {
   return `$${value}`
 }
 
+function estimateMpg({ make, model, year }) {
+  const makeBias = {
+    toyota: 3,
+    honda: 2,
+    ford: -1,
+    chevrolet: -2,
+    tesla: 40,
+    bmw: -1,
+    hyundai: 1,
+    kia: 1,
+    nissan: 0,
+  }
+
+  const modelBias = {
+    civic: 3,
+    corolla: 3,
+    camry: 1,
+    accord: 1,
+    prius: 9,
+    rav4: -2,
+    crv: -1,
+    f150: -8,
+    silverado: -9,
+    model3: 45,
+    modely: 42,
+  }
+
+  const normalizedMake = make.trim().toLowerCase()
+  const normalizedModel = model.trim().toLowerCase().replace(/\s+/g, '')
+  const base = 29
+  const agePenalty = Math.max(0, Math.floor((2026 - Number(year || 2026)) / 3))
+  const mpg = base + (makeBias[normalizedMake] ?? 0) + (modelBias[normalizedModel] ?? 0) - agePenalty
+  return Math.min(120, Math.max(14, mpg))
+}
+
 function BirdLogo() {
   return (
     <svg viewBox="0 0 64 64" className="bird-logo" aria-hidden="true">
@@ -492,10 +527,112 @@ function GroupDashboardPage({ bookingItems }) {
   )
 }
 
+function ProfilePage({ vehicleProfile, onVehicleProfileChange }) {
+  const estimatedMpg = estimateMpg(vehicleProfile)
+  const gallonsNeeded = vehicleProfile.tripMiles / estimatedMpg
+  const estimatedFuelCost = gallonsNeeded * vehicleProfile.gasPrice
+
+  function updateField(field, value) {
+    onVehicleProfileChange((current) => ({
+      ...current,
+      [field]: value,
+    }))
+  }
+
+  return (
+    <main className="page-shell">
+      <section className="section-heading">
+        <h1>Traveler Profile</h1>
+        <p>Add your car details to estimate fuel use and driving cost.</p>
+      </section>
+      <section className="grid-two">
+        <article className="card">
+          <h2>Vehicle Details</h2>
+          <form className="form-grid">
+            <label>
+              Car Make
+              <input
+                value={vehicleProfile.make}
+                onChange={(event) => updateField('make', event.target.value)}
+                placeholder="Toyota"
+              />
+            </label>
+            <label>
+              Car Model
+              <input
+                value={vehicleProfile.model}
+                onChange={(event) => updateField('model', event.target.value)}
+                placeholder="Camry"
+              />
+            </label>
+            <label>
+              Car Year
+              <input
+                type="number"
+                min="1980"
+                max="2026"
+                value={vehicleProfile.year}
+                onChange={(event) => updateField('year', Number(event.target.value))}
+              />
+            </label>
+            <label>
+              Trip Distance (miles)
+              <input
+                type="number"
+                min="1"
+                value={vehicleProfile.tripMiles}
+                onChange={(event) => updateField('tripMiles', Number(event.target.value))}
+              />
+            </label>
+            <label>
+              Gas Price (per gallon)
+              <input
+                type="number"
+                min="1"
+                step="0.01"
+                value={vehicleProfile.gasPrice}
+                onChange={(event) => updateField('gasPrice', Number(event.target.value))}
+              />
+            </label>
+          </form>
+        </article>
+        <article className="card">
+          <h2>Fuel Estimate</h2>
+          <div className="cost-list">
+            <div>
+              <span>Estimated MPG</span>
+              <strong>{estimatedMpg} mpg</strong>
+            </div>
+            <div>
+              <span>Gallons Needed</span>
+              <strong>{gallonsNeeded.toFixed(1)} gal</strong>
+            </div>
+            <div className="total-row">
+              <span>Estimated Fuel Cost</span>
+              <strong>{formatPrice(estimatedFuelCost.toFixed(2))}</strong>
+            </div>
+          </div>
+          <p className="group-hint">
+            Tip: add this estimate to Compare and Cost Planner when deciding between drive
+            vs train/flight.
+          </p>
+        </article>
+      </section>
+    </main>
+  )
+}
+
 function App() {
   const navigate = useNavigate()
   const [bookingItems, setBookingItems] = useState([])
   const [trackedRoutes, setTrackedRoutes] = useState(initialTrackedRoutes)
+  const [vehicleProfile, setVehicleProfile] = useState({
+    make: 'Toyota',
+    model: 'Camry',
+    year: 2020,
+    tripMiles: 440,
+    gasPrice: 3.65,
+  })
 
   const bookedIds = bookingItems.map((item) => item.id)
   const trackedRouteIds = trackedRoutes.map((route) => route.id)
@@ -567,6 +704,7 @@ function App() {
           <NavLink to="/planner">Cost Planner</NavLink>
           <NavLink to="/booking">Booking</NavLink>
           <NavLink to="/alerts">Alerts</NavLink>
+          <NavLink to="/profile">Profile</NavLink>
           <NavLink to="/group">Group Tools</NavLink>
         </nav>
       </header>
@@ -607,6 +745,10 @@ function App() {
         <Route
           path="/alerts"
           element={<AlertsPage trackedRoutes={trackedRoutes} onSimulatePriceTick={handleSimulatePriceTick} />}
+        />
+        <Route
+          path="/profile"
+          element={<ProfilePage vehicleProfile={vehicleProfile} onVehicleProfileChange={setVehicleProfile} />}
         />
         <Route path="/group" element={<GroupDashboardPage bookingItems={bookingItems} />} />
       </Routes>
