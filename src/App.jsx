@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { NavLink, Route, Routes, useNavigate } from 'react-router-dom'
 
 const baseTransportOptions = [
@@ -46,6 +46,10 @@ const initialTrackedRoutes = [
 ]
 
 function formatPrice(value) {
+  const n = typeof value === 'string' ? Number.parseFloat(value) : Number(value)
+  if (Number.isFinite(n) && !Number.isInteger(n)) {
+    return `$${n.toFixed(2)}`
+  }
   return `$${value}`
 }
 
@@ -82,6 +86,35 @@ function estimateMpg({ make, model, year }) {
   const agePenalty = Math.max(0, Math.floor((2026 - Number(year || 2026)) / 3))
   const mpg = base + (makeBias[normalizedMake] ?? 0) + (modelBias[normalizedModel] ?? 0) - agePenalty
   return Math.min(120, Math.max(14, mpg))
+}
+
+function getDrivingCostParts(vehicleProfile) {
+  const mpg = estimateMpg(vehicleProfile)
+  const gallons = vehicleProfile.tripMiles / mpg
+  const gasCost = gallons * vehicleProfile.gasPrice
+  const tolls = Math.min(55, Math.round(vehicleProfile.tripMiles * 0.065))
+  const parking = 22
+  return {
+    gasCost,
+    tolls,
+    parking,
+    total: gasCost + tolls + parking,
+  }
+}
+
+function BellIcon({ active }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className={`bell-icon ${active ? 'bell-icon--active' : ''}`}
+      aria-hidden="true"
+    >
+      <path
+        d="M12 22a2.5 2.5 0 002.45-2h-4.9A2.5 2.5 0 0012 22zm8-5V11a8 8 0 10-16 0v6l-2 2v1h20v-1l-2-2z"
+        fill="currentColor"
+      />
+    </svg>
+  )
 }
 
 function BirdLogo() {
@@ -206,6 +239,9 @@ function ComparePage({ transportOptions, onAddBooking, bookedIds }) {
       .sort((a, b) => a.price - b.price)
   }, [destinationAwareOptions, maxBudget, selectedMode])
 
+  const cheapestPrice =
+    filteredOptions.length > 0 ? filteredOptions[0].price : null
+
   return (
     <main className="page-shell">
       <section className="section-heading">
@@ -251,12 +287,26 @@ function ComparePage({ transportOptions, onAddBooking, bookedIds }) {
           <span className="chip">4 live sources synced</span>
         </div>
         <div className="comparison-grid">
-          {filteredOptions.map((option) => (
-            <article className="compare-item" key={option.mode}>
-              <p className="tag">{option.score}</p>
+          {filteredOptions.map((option) => {
+            const isCheapest = cheapestPrice !== null && option.price === cheapestPrice
+            return (
+            <article
+              className={`compare-item ${isCheapest ? 'compare-item--cheapest' : ''}`}
+              key={option.id}
+            >
+              {isCheapest ? (
+                <>
+                  <p className="tag tag--cheapest">🏆 Cheapest Option</p>
+                  <p className="budget-hint">Best for budget travelers</p>
+                </>
+              ) : (
+                <p className="tag">{option.score}</p>
+              )}
               <h3>{option.mode}</h3>
               <p>{option.provider}</p>
-              <p className="price">{formatPrice(option.price)}</p>
+              <p className={`price ${isCheapest ? 'price--highlight' : ''}`}>
+                {formatPrice(option.price)}
+              </p>
               <div className="meta-row">
                 <span>{option.totalTime}</span>
                 <span>{option.carbon}</span>
@@ -270,7 +320,7 @@ function ComparePage({ transportOptions, onAddBooking, bookedIds }) {
                 {bookedIds.includes(option.id) ? 'Added to Booking' : 'Add to Booking'}
               </button>
             </article>
-          ))}
+          )})}
         </div>
         {!filteredOptions.length && <p className="empty-state">No routes match this filter yet.</p>}
       </section>
@@ -278,12 +328,29 @@ function ComparePage({ transportOptions, onAddBooking, bookedIds }) {
   )
 }
 
-function CostPlannerPage({ bookingItems }) {
-  const transportTotal = bookingItems.reduce((sum, item) => sum + item.price, 0) || 178
+function CostPlannerPage({ bookingItems, vehicleProfile }) {
+  const drivingParts = getDrivingCostParts(vehicleProfile)
+  const hasDriveBooking = bookingItems.some((item) => item.mode === 'Drive')
+  const flights = bookingItems.filter((item) => item.mode === 'Flight')
+  const trains = bookingItems.filter((item) => item.mode === 'Train')
+  const buses = bookingItems.filter((item) => item.mode === 'Bus')
+
+  let transportTotal = 0
+  for (const item of bookingItems) {
+    if (item.mode === 'Drive') {
+      transportTotal += drivingParts.total
+    } else {
+      transportTotal += item.price
+    }
+  }
+  if (bookingItems.length === 0) {
+    transportTotal = 178
+  }
+
   const housing = 284
-  const localTransit = 46
+  const localTransitOnly = 46
   const food = 110
-  const projectedTotal = transportTotal + housing + localTransit + food
+  const totalTripCost = transportTotal + housing + localTransitOnly + food
 
   return (
     <main className="page-shell">
@@ -316,11 +383,95 @@ function CostPlannerPage({ bookingItems }) {
             </button>
           </form>
         </article>
-        <article className="card">
-          <h2>Estimated Total Cost</h2>
+        <article className="card cost-planner-card">
+          <p className="cost-intro">
+            This estimate includes all major driving-related expenses (gas, tolls, destination parking)
+            when Drive is in your selected bookings. Update your vehicle under Profile for a more accurate
+            fuel estimate.
+          </p>
+
+          <h3 className="cost-section-title">Price Breakdown</h3>
+
+          {flights.length > 0 && (
+            <>
+              <h4 className="cost-subsection-title">Flight Cost Breakdown</h4>
+              <div className="cost-list cost-list--tight">
+                {flights.map((item) => (
+                  <div key={item.id}>
+                    <span>
+                      {item.provider} ({item.mode})
+                    </span>
+                    <strong>{formatPrice(item.price)}</strong>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {trains.length > 0 && (
+            <>
+              <h4 className="cost-subsection-title">Train Cost Breakdown</h4>
+              <div className="cost-list cost-list--tight">
+                {trains.map((item) => (
+                  <div key={item.id}>
+                    <span>
+                      {item.provider} ({item.mode})
+                    </span>
+                    <strong>{formatPrice(item.price)}</strong>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {buses.length > 0 && (
+            <>
+              <h4 className="cost-subsection-title">Bus Cost Breakdown</h4>
+              <div className="cost-list cost-list--tight">
+                {buses.map((item) => (
+                  <div key={item.id}>
+                    <span>
+                      {item.provider} ({item.mode})
+                    </span>
+                    <strong>{formatPrice(item.price)}</strong>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          <h4 className="cost-subsection-title">Driving Cost Breakdown</h4>
+          <div className="cost-list cost-list--tight">
+            <div>
+              <span>Gas (estimated fuel cost)</span>
+              <strong>{formatPrice(Math.round(drivingParts.gasCost * 100) / 100)}</strong>
+            </div>
+            <div>
+              <span>Tolls (highway / road fees)</span>
+              <strong>{formatPrice(drivingParts.tolls)}</strong>
+            </div>
+            <div>
+              <span>Parking (destination parking)</span>
+              <strong>{formatPrice(drivingParts.parking)}</strong>
+            </div>
+            <div className="cost-subtotal-row">
+              <span>Driving subtotal</span>
+              <strong>{formatPrice(Math.round(drivingParts.total * 100) / 100)}</strong>
+            </div>
+          </div>
+          {!hasDriveBooking && (
+            <p className="cost-footnote">
+              {bookingItems.length > 0
+                ? 'Driving costs above are for reference. Your transportation total uses only the modes you selected (flight, train, bus, etc.).'
+                : 'Add routes from Compare to tailor this breakdown. Transportation uses a sample total until you select options.'}
+            </p>
+          )}
+
+          <div className="cost-divider" />
+
           <div className="cost-list">
             <div>
-              <span>Transportation</span>
+              <span>Transportation total</span>
               <strong>{formatPrice(transportTotal)}</strong>
             </div>
             <div>
@@ -328,17 +479,20 @@ function CostPlannerPage({ bookingItems }) {
               <strong>{formatPrice(housing)}</strong>
             </div>
             <div>
-              <span>Local transit & parking</span>
-              <strong>{formatPrice(localTransit)}</strong>
+              <span>Local transit (metro, rideshare — excludes parking)</span>
+              <strong>{formatPrice(localTransitOnly)}</strong>
             </div>
             <div>
               <span>Food estimate</span>
               <strong>{formatPrice(food)}</strong>
             </div>
-            <div className="total-row">
-              <span>Projected Total</span>
-              <strong>{formatPrice(projectedTotal)}</strong>
-            </div>
+          </div>
+
+          <div className="cost-divider cost-divider--strong" />
+
+          <div className="total-trip-cost">
+            <span className="total-trip-cost__label">Total Trip Cost</span>
+            <strong className="total-trip-cost__value">{formatPrice(totalTripCost)}</strong>
           </div>
         </article>
       </section>
@@ -348,6 +502,21 @@ function CostPlannerPage({ bookingItems }) {
 
 function BookingPage({ bookingItems, onRemoveBooking, onTrackRoute, trackedRouteIds }) {
   const total = bookingItems.reduce((sum, item) => sum + item.price, 0)
+  const [trackFeedbackId, setTrackFeedbackId] = useState(null)
+
+  useEffect(() => {
+    if (!trackFeedbackId) return
+    const t = window.setTimeout(() => setTrackFeedbackId(null), 5000)
+    return () => window.clearTimeout(t)
+  }, [trackFeedbackId])
+
+  function handleTrackClick(item) {
+    const wasTracked = trackedRouteIds.includes(item.id)
+    onTrackRoute(item)
+    if (!wasTracked) {
+      setTrackFeedbackId(item.id)
+    }
+  }
 
   return (
     <main className="page-shell">
@@ -384,27 +553,41 @@ function BookingPage({ bookingItems, onRemoveBooking, onTrackRoute, trackedRoute
         <div className="booking-list">
           {bookingItems.map((item) => (
             <article className="booking-item" key={item.id}>
-              <div>
-                <h3>
-                  {item.mode} - {item.provider}
-                </h3>
-                <p>
-                  {formatPrice(item.price)} - {item.totalTime}
+              <div className="booking-item-row">
+                <div>
+                  <h3>
+                    {item.mode} - {item.provider}
+                  </h3>
+                  <p>
+                    {formatPrice(item.price)} - {item.totalTime}
+                  </p>
+                </div>
+                <div className="hero-actions">
+                  <button type="button" className="btn btn-secondary" onClick={() => onRemoveBooking(item.id)}>
+                    Remove
+                  </button>
+                  <button
+                    type="button"
+                    className={`btn btn-primary ${trackedRouteIds.includes(item.id) ? 'btn-alert-active' : ''}`}
+                    onClick={() => handleTrackClick(item)}
+                    disabled={trackedRouteIds.includes(item.id)}
+                  >
+                    {trackedRouteIds.includes(item.id) ? (
+                      <span className="btn-with-bell">
+                        <BellIcon active />
+                        Alert active
+                      </span>
+                    ) : (
+                      'Set Price Alert'
+                    )}
+                  </button>
+                </div>
+              </div>
+              {trackFeedbackId === item.id && trackedRouteIds.includes(item.id) && (
+                <p className="track-confirm" role="status" aria-live="polite">
+                  ✅ Price alert enabled. We&apos;ll notify you if prices change.
                 </p>
-              </div>
-              <div className="hero-actions">
-                <button type="button" className="btn btn-secondary" onClick={() => onRemoveBooking(item.id)}>
-                  Remove
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  onClick={() => onTrackRoute(item)}
-                  disabled={trackedRouteIds.includes(item.id)}
-                >
-                  {trackedRouteIds.includes(item.id) ? 'Tracking' : 'Track Price'}
-                </button>
-              </div>
+              )}
             </article>
           ))}
         </div>
@@ -418,6 +601,7 @@ function BookingPage({ bookingItems, onRemoveBooking, onTrackRoute, trackedRoute
 
 function AlertsPage({ trackedRoutes, onSimulatePriceTick }) {
   const [notificationSubscriptions, setNotificationSubscriptions] = useState({})
+  const [confirmRouteId, setConfirmRouteId] = useState(null)
 
   const timeline = [
     { day: 'Now', event: 'Lowest average fare window opens', trend: 'down' },
@@ -427,10 +611,19 @@ function AlertsPage({ trackedRoutes, onSimulatePriceTick }) {
   ]
 
   function handleToggleNotification(routeId) {
-    setNotificationSubscriptions((current) => ({
-      ...current,
-      [routeId]: !current[routeId],
-    }))
+    setNotificationSubscriptions((current) => {
+      const nextOn = !current[routeId]
+      const next = { ...current, [routeId]: nextOn }
+      window.setTimeout(() => {
+        if (nextOn) {
+          setConfirmRouteId(routeId)
+          window.setTimeout(() => setConfirmRouteId(null), 6000)
+        } else {
+          setConfirmRouteId(null)
+        }
+      }, 0)
+      return next
+    })
   }
 
   return (
@@ -454,10 +647,19 @@ function AlertsPage({ trackedRoutes, onSimulatePriceTick }) {
             const first = route.history[0]
             const latest = route.history[route.history.length - 1]
             const delta = latest - first
+            const alertOn = notificationSubscriptions[route.id]
             return (
-              <article className="compare-item" key={route.id}>
-                <h3>{route.mode}</h3>
-                <p>{route.route}</p>
+              <article
+                className={`compare-item tracked-route-card ${alertOn ? 'tracked-route-card--alert-on' : ''}`}
+                key={route.id}
+              >
+                <div className="tracked-route-header">
+                  <BellIcon active={alertOn} />
+                  <div>
+                    <h3>{route.mode}</h3>
+                    <p>{route.route}</p>
+                  </div>
+                </div>
                 <p className="price">{formatPrice(latest)}</p>
                 <p className={delta <= 0 ? 'trend down' : 'trend up'}>
                   {delta <= 0 ? `Down ${formatPrice(Math.abs(delta))}` : `Up ${formatPrice(delta)}`}
@@ -465,16 +667,26 @@ function AlertsPage({ trackedRoutes, onSimulatePriceTick }) {
                 <p className="sparkline">{route.history.map((value) => formatPrice(value)).join(' -> ')}</p>
                 <button
                   type="button"
-                  className="btn btn-secondary"
+                  className={alertOn ? 'btn btn-secondary btn-alert-on' : 'btn btn-secondary'}
                   onClick={() => handleToggleNotification(route.id)}
                 >
-                  {notificationSubscriptions[route.id]
-                    ? 'Price Notifications On'
-                    : 'Track Price Notification'}
+                  {alertOn ? (
+                    <span className="btn-with-bell">
+                      <BellIcon active />
+                      Alert active
+                    </span>
+                  ) : (
+                    'Set Price Alert'
+                  )}
                 </button>
-                {notificationSubscriptions[route.id] && (
+                {confirmRouteId === route.id && alertOn && (
+                  <p className="alert-toast" role="status" aria-live="polite">
+                    ✅ Price alert enabled. We&apos;ll notify you if prices change.
+                  </p>
+                )}
+                {alertOn && confirmRouteId !== route.id && (
                   <p className="notification-status">
-                    We will notify you when this route drops by at least $10.
+                    Notifications on — we&apos;ll email you about meaningful price moves on this route.
                   </p>
                 )}
               </article>
@@ -739,7 +951,10 @@ function App() {
             />
           }
         />
-        <Route path="/planner" element={<CostPlannerPage bookingItems={bookingItems} />} />
+        <Route
+          path="/planner"
+          element={<CostPlannerPage bookingItems={bookingItems} vehicleProfile={vehicleProfile} />}
+        />
         <Route
           path="/booking"
           element={
